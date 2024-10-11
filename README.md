@@ -26,7 +26,17 @@ This project is a blockchain indexer that allows you to index and track events f
 
    This command will build the Docker image and start the containers defined in the `docker-compose.yml` file.
 
-3. The indexer should now be running and processing blocks. You can view the logs in the console.
+3. The indexer should now be running and processing blocks for each contract in separate containers. You can view the logs in the console.
+
+### Scaling
+
+To process different contracts on separate instances:
+
+1. Modify the `docker-compose.yml` file to add or remove services for each contract you want to process.
+
+2. For each service, set the `CONTRACTS_TO_PROCESS` environment variable to the name of the contract you want that instance to process.
+
+3. Run `docker-compose up --scale indexer-contract1=1 indexer-contract2=1` to start one instance for each contract.
 
 ### Adding New Contracts
 
@@ -34,17 +44,17 @@ To add a new contract to the indexer:
 
 1. Open `src/config/config.ts`
 
-2. Add a new entry to the `contracts` object in the `config` constant:
+2. Add a new entry to the `allContracts` object:
 
    ```typescript
-   contracts: {
+   const allContracts = {
      // ... existing contracts
      newContract: {
        address: "0x1234567890123456789012345678901234567890",
        chainRpcUrl: "https://your-rpc-url.com/",
        startBlock: 1000000, // The block to start indexing from
      },
-   }
+   };
    ```
 
 3. Create a new file in `src/contracts/` directory for your contract's ABI:
@@ -56,17 +66,17 @@ To add a new contract to the indexer:
    ];
    ```
 
-4. In `src/contracts/ContractRegistry.ts`, register your new contract:
+4. In `src/contracts/ContractRegistry.ts`, import and register your new contract:
 
    ```typescript
    import { NewContractABI } from "./NewContract";
 
-   // ... existing code
-
-   ContractRegistry.registerContract("newContract", NewContractABI);
+   // The registration is now done automatically for all contracts in the config
    ```
 
-5. Rebuild and restart the Docker containers:
+5. Update the `docker-compose.yml` file to add a new service for the new contract if you want to process it separately.
+
+6. Rebuild and restart the Docker containers:
    ```bash
    docker-compose down
    docker-compose up --build
@@ -79,6 +89,7 @@ You can modify the following environment variables in the `docker-compose.yml` f
 - `REDIS_URL`: The URL for your Redis instance
 - `MONGO_URL`: The URL for your MongoDB instance
 - `MONGO_DB_NAME`: The name of the MongoDB database to use
+- `CONTRACTS_TO_PROCESS`: Comma-separated list of contract names to process in each instance
 
 ## Troubleshooting
 

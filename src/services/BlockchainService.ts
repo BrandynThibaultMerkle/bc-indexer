@@ -1,7 +1,8 @@
+import { IBlockchainService } from "../interfaces/IBlockchainService";
 import { ethers } from "ethers";
-import retryAsPromised from "retry-as-promised";
+import { BlockchainError } from "../utils/errors";
 
-export class BlockchainService {
+export class BlockchainService implements IBlockchainService {
   private providers: Map<string, ethers.providers.JsonRpcProvider> = new Map();
 
   getProvider(rpcUrl: string): ethers.providers.JsonRpcProvider {
@@ -11,12 +12,28 @@ export class BlockchainService {
     return this.providers.get(rpcUrl)!;
   }
 
-  private runPromiseWithRetry<T>(callback: () => Promise<T>): Promise<T> {
-    return retryAsPromised(callback, {
-      max: 3,
-      backoffBase: 3000,
-      backoffExponent: 1.1,
-    });
+  private async runWithRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    let lastError: Error | undefined;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+        console.warn(`Attempt ${attempt} failed: ${error.message}`);
+        if (attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+    throw new BlockchainError(
+      `Operation failed after ${maxRetries} attempts`,
+      lastError
+    );
   }
 
   async getLogsForContract(
@@ -25,7 +42,7 @@ export class BlockchainService {
     toBlock: number,
     rpcUrl: string
   ): Promise<ethers.providers.Log[]> {
-    return this.runPromiseWithRetry(async () => {
+    return this.runWithRetry(async () => {
       const provider = this.getProvider(rpcUrl);
       return provider.getLogs({
         address: contractAddress,
@@ -36,7 +53,7 @@ export class BlockchainService {
   }
 
   async getCurrentBlockNumber(rpcUrl: string): Promise<bigint> {
-    return this.runPromiseWithRetry(async () => {
+    return this.runWithRetry(async () => {
       const provider = this.getProvider(rpcUrl);
       const blockNumber = await provider.getBlockNumber();
       return BigInt(blockNumber);

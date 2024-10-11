@@ -15,7 +15,8 @@ export class ContractRegistry {
   static registerContract(name: string, abi: any[]): void {
     const contractConfig = config.contracts[name];
     if (!contractConfig) {
-      throw new Error(`Contract configuration not found for: ${name}`);
+      console.warn(`Contract configuration not found for: ${name}. Skipping.`);
+      return;
     }
 
     const contractInterface = new ethers.utils.Interface(abi);
@@ -41,11 +42,9 @@ export class ContractRegistry {
   }
 }
 
-// Register your contracts here, add only the needed functions for processing events
-ContractRegistry.registerContract("contract1", [
-  // TODO: add abi
-]);
-
-ContractRegistry.registerContract("contract2", [
-  // TODO: add abi
-]);
+// Register only the contracts specified in the config
+Object.keys(config.contracts).forEach((contractName) => {
+  ContractRegistry.registerContract(contractName, [
+    // TODO: add abi for each contract
+  ]);
+});

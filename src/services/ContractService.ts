@@ -1,21 +1,17 @@
 import { ethers } from "ethers";
-import { BlockchainService } from "./BlockchainService";
-import { RedisService } from "./RedisService";
-import { ContractRegistry } from "../contracts/ContractRegistry";
+import { IBlockchainService } from "../interfaces/IBlockchainService";
+import { IRedisService } from "../interfaces/IRedisService";
 import { ContractConfig } from "../config/config";
+import { IContractService } from "../interfaces/IContractService";
 import { convertBigNumberToString } from "../utils/bigNumberUtils";
+import { ContractRegistry } from "../contracts/ContractRegistry";
+import { ContractError, BlockchainError } from "../utils/errors";
 
-export class ContractService {
-  private blockchainService: BlockchainService;
-  private redisService: RedisService;
-
+export class ContractService implements IContractService {
   constructor(
-    blockchainService: BlockchainService,
-    redisService: RedisService
-  ) {
-    this.blockchainService = blockchainService;
-    this.redisService = redisService;
-  }
+    private blockchainService: IBlockchainService,
+    private redisService: IRedisService
+  ) {}
 
   private decodeLogs(
     logs: ethers.providers.Log[],
@@ -51,36 +47,46 @@ export class ContractService {
     fromBlock: number,
     toBlock: number
   ): Promise<number> {
-    console.log(
-      `[ContractService] Fetching logs for ${contractName} from block ${fromBlock} to ${toBlock}`
-    );
-    const logs = await this.blockchainService.getLogsForContract(
-      contractConfig.address,
-      fromBlock,
-      toBlock,
-      contractConfig.chainRpcUrl
-    );
-    console.log(
-      `[ContractService] Found ${logs.length} logs for ${contractName}`
-    );
-
-    const contractInfo = ContractRegistry.getContractInfo(contractName);
-    const decodedLogs = this.decodeLogs(logs, contractInfo.interface);
-
-    console.log(
-      `[ContractService] Decoded ${decodedLogs.length} logs for ${contractName}`
-    );
-
-    for (const decodedLog of decodedLogs) {
+    try {
       console.log(
-        `[ContractService] Processing log: Event=${decodedLog.event}, Block=${decodedLog.blockNumber}, TxHash=${decodedLog.transactionHash}`
+        `[ContractService] Fetching logs for ${contractName} from block ${fromBlock} to ${toBlock}`
       );
-      await this.redisService.addToQueue(
-        contractInfo.queueName,
-        JSON.stringify(decodedLog)
+      const logs = await this.blockchainService.getLogsForContract(
+        contractConfig.address,
+        fromBlock,
+        toBlock,
+        contractConfig.chainRpcUrl
       );
-    }
+      console.log(
+        `[ContractService] Found ${logs.length} logs for ${contractName}`
+      );
 
-    return decodedLogs.length;
+      const contractInfo = ContractRegistry.getContractInfo(contractName);
+      const decodedLogs = this.decodeLogs(logs, contractInfo.interface);
+
+      console.log(
+        `[ContractService] Decoded ${decodedLogs.length} logs for ${contractName}`
+      );
+
+      for (const decodedLog of decodedLogs) {
+        console.log(
+          `[ContractService] Processing log: Event=${decodedLog.event}, Block=${decodedLog.blockNumber}, TxHash=${decodedLog.transactionHash}`
+        );
+        await this.redisService.addToQueue(
+          contractInfo.queueName,
+          JSON.stringify(decodedLog)
+        );
+      }
+
+      return decodedLogs.length;
+    } catch (error) {
+      if (error instanceof BlockchainError) {
+        throw new ContractError(
+          `Failed to index logs for ${contractName}`,
+          error
+        );
+      }
+      throw error;
+    }
   }
 }

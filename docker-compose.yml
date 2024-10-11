@@ -1,14 +1,24 @@
 version: "3.8"
 
 services:
-  app:
+  indexer-contract1:
     build: .
-    ports:
-      - "3000:3000"
     environment:
       - REDIS_URL=redis://redis:6379
       - MONGO_URL=mongodb://mongo:27017
       - MONGO_DB_NAME=blockchain_indexer
+      - CONTRACTS_TO_PROCESS=contract1
+    depends_on:
+      - redis
+      - mongo
+
+  indexer-contract2:
+    build: .
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URL=mongodb://mongo:27017
+      - MONGO_DB_NAME=blockchain_indexer
+      - CONTRACTS_TO_PROCESS=contract2
     depends_on:
       - redis
       - mongo
